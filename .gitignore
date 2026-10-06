@@ -8,6 +8,10 @@ blog-app/build/
 blog-app/dist/
 blog-app/*.spec
 
+# Python 缓存（上传脚本用 git add -A，必须挡住这些）
+__pycache__/
+*.pyc
+
 # 配色面板的自动备份（带时间戳，只留在本机）
 assets/scss/.theme-backups/
 

@@ -32,7 +32,9 @@ jobs:
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: latest
+          # 钉住版本：与本机验证过的版本一致，避免上游发新版导致构建突然失败
+          # 想升级时改这里，并在本机用同版本 hugo 跑一遍确认无误
+          hugo-version: '0.163.3'
           extended: true
 
       - name: Setup Pages
