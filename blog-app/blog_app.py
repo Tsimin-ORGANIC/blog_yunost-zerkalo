@@ -1,36 +1,49 @@
 # -*- coding: utf-8 -*-
 """
-钇·锆·拾遗（Yunost Zerkalo · Y-Zr）· 博客助手
-为不会用 git / 命令行的作者定制的桌面端发布工具：
+Hugo 博客助手（通用版 / 主题无关）
+
+给不熟悉 git 与命令行的作者用的桌面发布工具：
   - 新建 / 编辑文章（标题、分类、标签、正文）
   - 插图：自动转格式、压缩、放入文章目录并生成 figure 代码
   - 保存草稿 / 一键发布（git 提交推送，GitHub Actions 自动构建上线）
   - 本地预览（需本机装有 Hugo）
 
-依赖：仅 Python 标准库 + Pillow（打包后的 exe 无需安装 Python）
+通用性设计（不绑定任何站点 / 主题）：
+  - 站点名、预览端口、关于页路径都不写死，从 hugo.toml 自动探测，
+    也可在「设置 → 站点设置」里手工覆盖，按博客文件夹分别记忆
+  - 只依赖 Hugo 的通用约定（hugo.toml + content/posts + content/page/*），
+    不依赖 Stack 或任何主题的私有字段，换主题照样能用
 
-注意：本副本属于「钇·锆·拾遗」站，配置文件与 senychistory 的副本相互独立，
-预览端口也错开（本站 1314），避免两个博客互相干扰。
+依赖：仅 Python 标准库 + Pillow（打包后的 exe 无需安装 Python）
 """
 
 import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import threading
 import webbrowser
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from tkinter import (BOTH, END, INSERT, LEFT, RIGHT, StringVar, Text, Tk, Toplevel,
                      filedialog, messagebox, ttk, Menu)
 from tkinter.scrolledtext import ScrolledText
 
-APP_NAME = "钇·锆·拾遗 · 博客助手"
-CONFIG_PATH = Path(os.environ.get("APPDATA", Path.home())) / "BlogPublish" / "config-yunost.json"
+APP_NAME = "Hugo 博客助手"
+APP_VERSION = "2.0"
+CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "BlogPublish"
+CONFIG_PATH = CONFIG_DIR / "config.json"
+# 旧版专用副本的配置，首次启动时自动并入，避免重新选一次文件夹
+LEGACY_CONFIG_NAMES = ["config.json", "config-yunost.json", "config-seny.json",
+                       "config-senychistory.json"]
+
 POSTS_DIR = Path("content") / "posts"
-PREVIEW_PORT = 1314
+DEFAULT_PORT = 1313
+DEFAULT_SITE_NAME = "我的博客"
 
 try:
     from PIL import Image
@@ -44,17 +57,141 @@ IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"}
 # ─────────────────────────── 配置 ───────────────────────────
 
 def load_config():
+    cfg = {}
     if CONFIG_PATH.exists():
         try:
-            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
         except Exception:
-            pass
-    return {}
+            cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    cfg.setdefault("sites", {})
+    cfg.setdefault("recent", [])
+    # 兼容旧版：把专用副本记住的博客文件夹并进来
+    if not cfg.get("repo") and not cfg["recent"]:
+        for name in LEGACY_CONFIG_NAMES:
+            legacy = CONFIG_DIR / name
+            if legacy == CONFIG_PATH or not legacy.exists():
+                continue
+            try:
+                old = json.loads(legacy.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            if isinstance(old, dict) and old.get("repo"):
+                cfg["repo"] = old["repo"]
+                break
+    return cfg
 
 
 def save_config(cfg):
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_PATH.write_text(json.dumps(cfg, ensure_ascii=False, indent=2),
+                           encoding="utf-8")
+
+
+def site_settings(cfg, repo):
+    """取某个博客文件夹的站点设置（站点名 / 端口 / 关于页），不存在则给默认值"""
+    key = str(Path(repo).resolve()) if repo else ""
+    if not key:
+        return {}
+    sites = cfg.setdefault("sites", {})
+    s = sites.get(key)
+    if not isinstance(s, dict):
+        s = {}
+        sites[key] = s
+    return s
+
+
+# ──────────────────────── 站点探测 ────────────────────────
+
+def detect_site_name(repo):
+    """从 hugo.toml / hugo.yaml / config.toml 读站点标题"""
+    p = Path(repo)
+    for name in ("hugo.toml", "config.toml", "hugo.yaml", "config.yaml"):
+        f = p / name
+        if not f.exists():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        m = re.search(r"^\s*title\s*[:=]\s*['\"]?(.+?)['\"]?\s*(?:#.*)?$", text, re.M)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+    return p.name or DEFAULT_SITE_NAME
+
+
+def detect_preview_port(repo):
+    """从仓库里的 bat / Makefile 猜一个惯用预览端口，猜不到就用默认"""
+    p = Path(repo)
+    patterns = [r"--port\s+(\d{2,5})", r"-p\s+(\d{2,5})"]
+    for f in list(p.glob("*.bat")) + list(p.glob("*.cmd")) + [p / "Makefile"]:
+        if not f.exists():
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for pat in patterns:
+            m = re.search(pat, text)
+            if m:
+                port = int(m.group(1))
+                if 1024 <= port <= 65535:
+                    return port
+    return DEFAULT_PORT
+
+
+def find_repo_near_app():
+    """首次运行时，若本程序就放在某个博客仓库里（或其父目录），直接用它"""
+    try:
+        base = Path(sys.executable if getattr(sys, "frozen", False) else __file__).resolve().parent
+    except Exception:
+        return None
+    for cand in [base, base.parent, base.parent.parent]:
+        for marker in ("hugo.toml", "config.toml", "hugo.yaml"):
+            if (cand / marker).exists():
+                return cand
+    return None
+
+
+def find_about_candidates(repo):
+    """找出所有可能的「关于」页面：content/page/**/index.md"""
+    p = Path(repo) / "content" / "page"
+    if not p.exists():
+        return []
+    found = sorted({q for q in p.rglob("index.md") if "page" in q.parts},
+                   key=lambda x: str(x).lower())
+    if not found:
+        found = sorted(p.rglob("*.md"), key=lambda x: str(x).lower())
+    return found
+
+
+def pick_about_path(repo, override=None):
+    """确定关于页：优先用户指定，其次 url=/about/ 或目录名 about，最后第一个"""
+    p = Path(repo)
+    if override:
+        cand = p / override
+        if cand.exists():
+            return cand
+    cands = find_about_candidates(repo)
+    if not cands:
+        return p / "content" / "page" / "about" / "index.md"
+    for c in cands:
+        if c.parent.name.lower() == "about":
+            return c
+    return cands[0]
+
+
+def free_port(start=DEFAULT_PORT, tries=40):
+    """从 start 开始找一个未被占用的端口"""
+    for port in range(start, start + tries):
+        try:
+            with closing(socket.socket()) as s:
+                s.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    return start
 
 
 # ──────────────────────── 文章读写 ─────────────────────────
@@ -158,6 +295,7 @@ class Post:
         return ref, snippet
 
 
+
 def scan_posts(repo_root):
     posts_dir = Path(repo_root) / "content" / "posts"
     if not posts_dir.exists():
@@ -175,39 +313,42 @@ def scan_posts(repo_root):
     return result
 
 
-# ────────────────────────── git 操作 ──────────────────────────
+# ────────────────────────── 关于页 ──────────────────────────
 
-ABOUT_DEFAULT = """这里是钇·锆·拾遗（Yunost Zerkalo · Юность Зеркало），编号 Y-Zr。
+ABOUT_DEFAULT = """这里是我的个人博客。
 
-一间私人档案室，主要归档：
+在这个页面写点自我介绍、站点说明或者联系方式：
 
-- **摘录与批注** —— 读到的史料、画册、旧物，随手登记
-- **看展记录** —— 博物馆和美术馆的传阅件
-- **杂项库房** —— 平时钉住的黄昏、铁轨、生活碎片
+- **我在写什么** —— 读书笔记、看展记录、生活碎片……
+- **怎么找我** —— 邮箱 / 社交账号 / 留言方式
 
-可以用左侧栏的「检索」调卷宗，也可以在「库房」按时间浏览。盖章欢迎。
+写好后保存，再点「发布到 GitHub」就会更新到网上。
 """
 
 
-def load_about(repo_root):
+def load_about(repo_root, path=None):
     """读取关于页，返回 (meta, body, path)；不存在则用默认模板"""
-    path = Path(repo_root) / "content" / "page" / "about" / "index.md"
-    if path.exists():
-        meta, body = parse_front_matter(path.read_text(encoding="utf-8"))
-        return meta, body, path
-    meta = {"title": "登记簿", "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+08:00"),
-            "description": "关于本档案室与值班员", "draft": False,
-            "url": "/about/", "tags": [], "categories": []}
-    return meta, ABOUT_DEFAULT, path
+    p = Path(path) if path else pick_about_path(repo_root)
+    repo = Path(repo_root)
+    if p.exists():
+        meta, body = parse_front_matter(p.read_text(encoding="utf-8"))
+        return meta, body, p
+    title = p.parent.name if p.parent.name.lower() != "page" else "关于"
+    meta = {"title": title, "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+08:00"),
+            "description": "关于本站与作者", "draft": False,
+            "url": "/" + p.parent.name + "/", "tags": [], "categories": []}
+    return meta, ABOUT_DEFAULT, p
 
 
-def save_about(repo_root, meta, body):
-    path = Path(repo_root) / "content" / "page" / "about" / "index.md"
+def save_about(meta, body, path):
+    path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(build_front_matter(meta) + "\n" + body.rstrip() + "\n",
                     encoding="utf-8")
     return path
 
+
+# ────────────────────────── git 操作 ──────────────────────────
 
 def run_cmd(args, cwd, timeout=120):
     p = subprocess.run(args, cwd=str(cwd), capture_output=True, text=True,
@@ -252,29 +393,58 @@ class App:
         root.minsize(900, 620)
 
         self.repo = None
+        self.site_name = DEFAULT_SITE_NAME
+        self.port = DEFAULT_PORT
+        self.about_path = None
         self.post = None          # 当前打开的文章
         self.current_ref = None   # 当前列表里对应的 md 路径
         self.preview_proc = None
+        self.preview_repo = None
 
         self._build_menu()
         self._build_layout()
 
         cfg = load_config()
-        if cfg.get("repo"):
-            self._open_repo(cfg["repo"])
+        start = cfg.get("repo")
+        if not start or not Path(start).exists():
+            start = find_repo_near_app()
+        if start and Path(start).exists():
+            self._open_repo(Path(start))
+        else:
+            self.log("第一次使用：请点菜单「设置 → 选择博客文件夹」，"
+                     "选到你的博客根目录（里面有 hugo.toml）。")
 
     # ── 界面搭建 ──
     def _build_menu(self):
         m = Menu(self.root)
         fm = Menu(m, tearoff=0)
         fm.add_command(label="选择博客文件夹…", command=self.choose_repo)
+        self.recent_menu = Menu(fm, tearoff=0)
+        fm.add_cascade(label="最近打开", menu=self.recent_menu)
+        fm.add_separator()
+        fm.add_command(label="站点设置（名称 / 端口 / 关于页）…",
+                       command=self.site_settings_dialog)
         fm.add_separator()
         fm.add_command(label="退出", command=self.root.destroy)
         m.add_cascade(label="设置", menu=fm)
         hm = Menu(m, tearoff=0)
         hm.add_command(label="使用帮助", command=self.show_help)
+        hm.add_command(label="关于本工具", command=self.show_about_app)
         m.add_cascade(label="帮助", menu=hm)
         self.root.config(menu=m)
+        self._refresh_recent_menu()
+
+    def _refresh_recent_menu(self):
+        self.recent_menu.delete(0, "end")
+        cfg = load_config()
+        items = [p for p in cfg.get("recent", []) if Path(p).exists()]
+        if not items:
+            self.recent_menu.add_command(label="（暂无）", state="disabled")
+            return
+        for p in items[:8]:
+            label = f"{detect_site_name(p)}  —  {p}"
+            self.recent_menu.add_command(
+                label=label[:70], command=lambda q=p: self._open_repo(Path(q)))
 
     def _build_layout(self):
         style = ttk.Style()
@@ -344,7 +514,8 @@ class App:
         ttk.Button(actions, text="保存草稿", command=self.save_draft).pack(side=LEFT, padx=(0, 6))
         ttk.Button(actions, text="🌐 发布到 GitHub", command=self.publish).pack(side=LEFT, padx=6)
         ttk.Button(actions, text="本地预览", command=self.preview).pack(side=RIGHT, padx=6)
-        ttk.Button(actions, text="修改简介", command=self.edit_about).pack(side=RIGHT, padx=6)
+        self.btn_about = ttk.Button(actions, text="编辑关于页", command=self.edit_about)
+        self.btn_about.pack(side=RIGHT, padx=6)
 
         # 底部日志
         logf = ttk.LabelFrame(self.root, text=" 消息 ", padding=4)
@@ -370,18 +541,112 @@ class App:
         if not path:
             return
         p = Path(path)
-        if not (p / "hugo.toml").exists():
-            messagebox.showerror(APP_NAME, "所选文件夹里没有 hugo.toml，请选择博客根目录。")
-            return
+        if not (p / "hugo.toml").exists() and not (p / "config.toml").exists() \
+                and not (p / "hugo.yaml").exists():
+            if not messagebox.askyesno(
+                    APP_NAME,
+                    "这个文件夹里没有找到 hugo.toml。\n"
+                    "仍要把它当作博客根目录打开吗？\n\n"
+                    "（一般应选到博客最外层那个有 hugo.toml 的文件夹）"):
+                return
         self._open_repo(p)
 
     def _open_repo(self, p: Path):
+        p = Path(p)
         self.repo = p
         cfg = load_config()
         cfg["repo"] = str(p)
+        recent = [str(p)] + [x for x in cfg.get("recent", []) if x != str(p)]
+        cfg["recent"] = recent[:8]
+        s = site_settings(cfg, p)
+        s.setdefault("name", detect_site_name(p))
+        s.setdefault("port", detect_preview_port(p))
         save_config(cfg)
-        self.log(f"已打开博客文件夹：{p}")
+
+        self.site_name = s.get("name") or detect_site_name(p)
+        self.port = int(s.get("port") or DEFAULT_PORT)
+        self.about_path = pick_about_path(p, s.get("about"))
+        try:
+            s["about"] = str(self.about_path.relative_to(p)).replace("\\", "/")
+        except ValueError:
+            s["about"] = str(self.about_path)
+        save_config(cfg)
+
+        self.root.title(f"{self.site_name} · {APP_NAME}")
+        try:
+            self.btn_about.config(text=f"编辑「{self.about_path.parent.name}」页")
+        except Exception:
+            pass
+        self.log(f"已打开博客：{self.site_name}（{p}）")
+        self.log(f"预览端口 {self.port}，关于页 {s['about']}"
+                 f"（可在「设置 → 站点设置」里改）")
+        self._refresh_recent_menu()
         self.refresh_list()
+
+    def site_settings_dialog(self):
+        if not self._require_repo():
+            return
+        cfg = load_config()
+        s = site_settings(cfg, self.repo)
+
+        win = Toplevel(self.root)
+        win.title("站点设置")
+        win.geometry("520x300")
+        win.transient(self.root)
+        f = ttk.Frame(win, padding=12)
+        f.pack(fill=BOTH, expand=True)
+
+        ttk.Label(f, text="站点名称（只影响本工具窗口标题）：").grid(row=0, column=0, sticky="w")
+        v_name = StringVar(value=s.get("name") or self.site_name)
+        ttk.Entry(f, textvariable=v_name, width=40).grid(row=0, column=1, sticky="we", pady=4)
+
+        ttk.Label(f, text="本地预览端口：").grid(row=1, column=0, sticky="w")
+        v_port = StringVar(value=str(s.get("port") or DEFAULT_PORT))
+        ttk.Entry(f, textvariable=v_port, width=40).grid(row=1, column=1, sticky="we", pady=4)
+
+        ttk.Label(f, text="关于页文件：").grid(row=2, column=0, sticky="w")
+        cands = find_about_candidates(self.repo)
+        rel_paths = [str(c.relative_to(self.repo)).replace("\\", "/") for c in cands]
+        current = s.get("about") or (rel_paths[0] if rel_paths else "")
+        if current and current not in rel_paths:
+            rel_paths.insert(0, current)
+        v_about = StringVar(value=current)
+        cb = ttk.Combobox(f, textvariable=v_about, values=rel_paths, width=38)
+        cb.grid(row=2, column=1, sticky="we", pady=4)
+
+        ttk.Label(f, text="改完保存即可；端口被占用时会自动顺延到下一个空闲端口。",
+                  foreground="#777").grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        f.columnconfigure(1, weight=1)
+
+        def save_and_close():
+            try:
+                port = int(v_port.get().strip())
+            except ValueError:
+                messagebox.showerror(APP_NAME, "端口要填数字，比如 1313。")
+                return
+            s["name"] = v_name.get().strip() or detect_site_name(self.repo)
+            s["port"] = port
+            s["about"] = v_about.get().strip()
+            save_config(cfg)
+            self.site_name = s["name"]
+            self.port = port
+            self.about_path = pick_about_path(self.repo, s["about"])
+            self.root.title(f"{self.site_name} · {APP_NAME}")
+            try:
+                self.btn_about.config(text=f"编辑「{self.about_path.parent.name}」页")
+            except Exception:
+                pass
+            self.log(f"站点设置已保存：{self.site_name} / 端口 {self.port}")
+            win.destroy()
+
+        bar = ttk.Frame(win, padding=(12, 0))
+        bar.pack(fill="x", pady=(0, 12))
+        ttk.Button(bar, text="保存", command=save_and_close).pack(side=LEFT)
+        ttk.Button(bar, text="取消", command=win.destroy).pack(side=LEFT, padx=8)
+        ttk.Button(bar, text="重新探测", command=lambda: (
+            v_name.set(detect_site_name(self.repo)),
+            v_about.set(str(pick_about_path(self.repo).relative_to(self.repo)).replace("\\", "/")))
+        ).pack(side=LEFT)
 
     # ── 文章列表 ──
     def refresh_list(self):
@@ -510,24 +775,26 @@ class App:
         except Exception:
             self.body.insert(INSERT, before + after)
 
-    # ── 简介（关于页）──
+    # ── 关于页 ──
     def edit_about(self):
         if not self._require_repo():
             return
-        (meta, body, path) = load_about(self.repo)
+        path = self.about_path or pick_about_path(self.repo)
+        (meta, body, path) = load_about(self.repo, path)
+        label = meta.get("title") or path.parent.name
 
         win = Toplevel(self.root)
-        win.title("修改登记簿（「登记簿」页）")
+        win.title(f"修改「{label}」页")
         win.geometry("640x560")
-        ttk.Label(win, text="访客点开菜单里的「登记簿」看到的内容：", padding=(8, 6)
+        ttk.Label(win, text=f"访客点开菜单里的「{label}」看到的内容：", padding=(8, 6)
                   ).pack(anchor="w")
         text = ScrolledText(win, font=("Microsoft YaHei UI", 11), undo=True, wrap="word")
         text.pack(fill=BOTH, expand=True, padx=8)
         text.insert("1.0", body)
 
         def save_and_close():
-            save_about(self.repo, meta, text.get("1.0", END))
-            self.log("简介已保存。要点「🌐 发布到 GitHub」才会更新到网上。")
+            save_about(meta, text.get("1.0", END), path)
+            self.log(f"「{label}」页已保存。要点「🌐 发布到 GitHub」才会更新到网上。")
             win.destroy()
 
         bar = ttk.Frame(win, padding=8)
@@ -564,6 +831,16 @@ class App:
                 self.log("提示：第一次推送时如果弹出 GitHub 登录窗口，请按提示登录。")
         threading.Thread(target=work, daemon=True).start()
 
+    def _stop_preview(self):
+        if self.preview_proc and self.preview_proc.poll() is None:
+            self.preview_proc.terminate()
+            try:
+                self.preview_proc.wait(timeout=5)
+            except Exception:
+                self.preview_proc.kill()
+        self.preview_proc = None
+        self.preview_repo = None
+
     def preview(self):
         if not self._require_repo():
             return
@@ -574,17 +851,23 @@ class App:
                                    "不影响发布：直接点「发布到 GitHub」即可。")
             return
         if self.preview_proc and self.preview_proc.poll() is None:
-            webbrowser.open(f"http://localhost:{PREVIEW_PORT}/")
-            return
+            if self.preview_repo == self.repo:
+                webbrowser.open(f"http://localhost:{self.port}/")
+                return
+            self._stop_preview()
+        port = free_port(self.port)
+        if port != self.port:
+            self.log(f"端口 {self.port} 被占用，改用 {port}。")
         self.preview_proc = subprocess.Popen(
-            [hugo, "server", "--port", str(PREVIEW_PORT),
-             "--baseURL", f"http://localhost:{PREVIEW_PORT}/", "-D"],
+            [hugo, "server", "--port", str(port),
+             "--baseURL", f"http://localhost:{port}/", "-D"],
             cwd=str(self.repo), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        self.root.after(2500, lambda: webbrowser.open(f"http://localhost:{PREVIEW_PORT}/"))
-        self.log(f"本地预览已启动（http://localhost:{PREVIEW_PORT}/），关闭本程序即停止。")
+        self.preview_repo = self.repo
+        self.root.after(2500, lambda: webbrowser.open(f"http://localhost:{port}/"))
+        self.log(f"本地预览已启动（http://localhost:{port}/），关闭本程序即停止。")
 
+    # ── 帮助 ──
     def show_help(self):
-        Toplevel()
         msg = (
             "第一次使用：\n"
             "1. 菜单「设置 → 选择博客文件夹」，选到博客根目录（里面有 hugo.toml）\n"
@@ -592,14 +875,26 @@ class App:
             "   （图片会自动转成压缩 JPG，无需手动改格式）\n"
             "3. 「保存草稿」= 暂存不发布；「发布到 GitHub」= 一键上线\n"
             "\n"
+            "换一个博客：再点「选择博客文件夹」即可，\n"
+            "站点名、预览端口、关于页会按文件夹分别记住。\n"
+            "\n"
             "第一次发布会弹出 GitHub 登录窗口，登录一次即可。\n"
             "发布后等一两分钟，刷新博客网页就能看到新文章。\n"
             "\n"
             "常见问题：\n"
             "· 发布失败提示登录 → 登录 GitHub 后再点一次发布\n"
-            "· 本地预览不可用 → 说明这台电脑没装 Hugo，直接发布即可"
+            "· 本地预览不可用 → 说明这台电脑没装 Hugo，直接发布即可\n"
+            "· 端口冲突 → 工具会自动换一个空闲端口，看下方消息里的地址"
         )
         messagebox.showinfo(APP_NAME + " · 帮助", msg)
+
+    def show_about_app(self):
+        messagebox.showinfo(
+            APP_NAME + " · 关于",
+            f"{APP_NAME} v{APP_VERSION}\n\n"
+            "通用的 Hugo 博客写作与发布工具，不绑定任何站点或主题。\n"
+            "只要目录里有 hugo.toml 和 content/posts 就能用。\n\n"
+            "功能：写文章 / 插图压缩 / 保存草稿 / 一键 git 发布 / 本地预览")
 
 
 def main():
@@ -608,7 +903,10 @@ def main():
         return
     root = Tk()
     App(root)
-    root.mainloop()
+    try:
+        root.mainloop()
+    finally:
+        pass
 
 
 # ────────────────────────── 自测 ──────────────────────────
@@ -616,7 +914,7 @@ def main():
 def selftest():
     import tempfile
     tmp = Path(tempfile.mkdtemp(prefix="blogapp-test-"))
-    (tmp / "hugo.toml").write_text("x=1", encoding="utf-8")
+    (tmp / "hugo.toml").write_text("title = '测试博客'\n", encoding="utf-8")
     (tmp / POSTS_DIR).mkdir(parents=True)
 
     # 1. front matter 往返
@@ -646,20 +944,30 @@ def selftest():
     assert im.width <= 1600
     print("图片转换 OK:", ref, im.size, f"{out.stat().st_size // 1024}KB")
 
-    # 3. 登记簿读写（含 url 字段保留）
-    meta3, body3, path3 = load_about(tmp)
-    assert "摘录与批注" in body3 and meta3["url"] == "/about/"
-    save_about(tmp, meta3, "新的简介内容")
-    meta4, body4, _ = load_about(tmp)
-    assert body4.strip() == "新的简介内容" and meta4["url"] == "/about/"
-    print("登记簿读写 OK")
+    # 3. 站点探测（通用性）
+    assert detect_site_name(tmp) == "测试博客", detect_site_name(tmp)
+    print("站点名探测 OK:", detect_site_name(tmp))
+    (tmp / "预览.bat").write_text("@echo off\nhugo server --port 1314 -D\n", encoding="utf-8")
+    assert detect_preview_port(tmp) == 1314, detect_preview_port(tmp)
+    print("端口探测 OK:", detect_preview_port(tmp))
+    port = free_port(1313)
+    assert isinstance(port, int) and port >= 1313
+    print("端口选取 OK:", port)
 
-    # 4. 列表扫描
+    # 4. 关于页读写（自动定位 + url 字段保留）
+    meta3, body3, path3 = load_about(tmp)
+    assert meta3["title"] and "index.md" in str(path3)
+    save_about(meta3, "新的简介内容", path3)
+    meta4, body4, _ = load_about(tmp, path3)
+    assert body4.strip() == "新的简介内容" and meta4["url"] == meta3["url"]
+    print("关于页读写 OK:", path3.relative_to(tmp))
+
+    # 5. 列表扫描
     posts = scan_posts(tmp)
     assert len(posts) == 1 and posts[0].title == "测试文章"
     print("文章扫描 OK")
 
-    # 5. git 检测（非仓库应报错）
+    # 6. git 检测（非仓库应报错）
     try:
         git_publish(tmp, "x", print)
         print("git 检测失败：未报错")
