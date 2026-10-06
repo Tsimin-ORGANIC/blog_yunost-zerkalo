@@ -90,12 +90,16 @@ python -m PyInstaller --noconfirm 博客助手.spec   :: 必须走 spec，theme_
 
 ## 版权与许可
 
-本站对「内容」和「代码」分别授权，这是静态站点博客的通行做法：
+本站对「内容」和「代码」分别授权，这是静态站点博客的通行做法。
+仓库根目录放了两个文件，对应这两部分：
 
 | 部分 | 许可 | 说明 |
 | --- | --- | --- |
-| 正文内容（`content/` 下的文章与图片） | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh) | 版权归作者本人；转载需署名、非商业、相同方式共享 |
-| 站点定制代码（`assets/`、`layouts/` 等） | GPL-3.0 | 基于主题修改/扩展，随主题同协议发布 |
-| [Stack 主题](https://github.com/CaiJimmy/hugo-theme-stack) | [GPL-3.0-only](https://github.com/CaiJimmy/hugo-theme-stack/blob/master/LICENSE) | 以 git submodule 引用，保留上游 LICENSE 与页脚署名 |
+| 正文内容（`content/` 下的文章与图片） | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh) | 详见 [`LICENSE-CONTENT.md`](LICENSE-CONTENT.md)；转载需署名、非商业、相同方式共享 |
+| 站点定制代码（`assets/`、`layouts/`、`i18n/`、`tools/`、`blog-app/` 等） | [GPL-3.0](LICENSE) | 基于主题修改/扩展，随主题同协议发布 |
+| [Stack 主题](https://github.com/CaiJimmy/hugo-theme-stack) | [GPL-3.0-only](https://github.com/CaiJimmy/hugo-theme-stack/blob/master/LICENSE) | 已直接打包在 `themes/stack/`（非 submodule），保留上游 LICENSE 与页脚署名 |
+| 字体文件（`static/fonts/`） | 归各字体厂商 | 子集化自 Windows 系统字体，仅供本站显示，不得单独提取再分发 |
 
 > GPL 只约束**代码**的传播，不会"传染"到你写的文章和图片上——内容是你的原创作品，版权完全属于你，采用 CC 协议即可，无需与 GPL 兼容。
+
+© 2026 ZrYttrium
