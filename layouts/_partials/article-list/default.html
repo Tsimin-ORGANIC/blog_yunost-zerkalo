@@ -1,0 +1,7 @@
+{{ $image := partial "helper/image" (dict "Image" .Params.image "Resources" .Resources "Context" .) }}
+<article class="{{ if $image }}has-image{{ end }}">
+    {{ partial "article/components/header" (dict "Page" . "IsList" true) }}
+
+    {{- /* 传阅次数徽标：卡右上角，本机计数由 custom.ts 填充 */ -}}
+    <span class="zr-circulation zr-circulation--card" data-mode="card" data-path="{{ .RelPermalink }}">传阅 — 次</span>
+</article>

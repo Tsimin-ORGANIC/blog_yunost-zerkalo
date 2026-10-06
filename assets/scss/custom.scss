@@ -1,0 +1,430 @@
+/*
+ * 钇·锆·拾遗 —— Yunost Zerkalo (Юность Зеркало) · Y-Zr
+ * 视觉基调：「列宁格勒档案室」—— 暗夜库房、褪色纸卡、血锈红戳记
+ * 此文件会被主题自动 import（style.scss 末尾），无需改动模板
+ */
+
+/* ════════════════════════════════════════════════════════════
+ * 一、配色：暗夜库房 + 褪色纸卡 + 血锈红戳记
+ * ════════════════════════════════════════════════════════════ */
+:root {
+    /* 库房地面：暗夜黑；纸卡：黑夜里翻出的一叠档案（深铁灰） */
+    --body-background: #111111;
+    --card-background: #2A2C30;
+
+    /* 褪色的泛黄纸字（老档案上的钢笔水） */
+    --body-text-color: #D4C5B0;
+    --card-text-color-main: #D4C5B0;
+    --card-text-color-secondary: rgba(212, 197, 176, 0.68);
+    --card-text-color-tertiary: rgba(212, 197, 176, 0.42);
+    --card-separator-color: rgba(212, 197, 176, 0.14);
+    --card-background-selected: rgba(212, 197, 176, 0.08);
+
+    /* 血锈红：只给链接、戳记和警告状态（在泛黄纸上够醒目，又不刺眼） */
+    --accent-color: #C24141;
+    --accent-color-darker: #8B0000;
+    --accent-color-text: #D4C5B0;
+
+    /* 氧化锆蓝：备用状态色（检索、冷静态悬停） */
+    --zircon-blue: #4E729E;
+
+    /* 装订线：档案卡片边缘的一圈压痕 */
+    --archive-border: 1px solid rgba(212, 197, 176, 0.16);
+
+    /* 档案是直角的：卡片、标签一律取消圆角 */
+    --card-border-radius: 0;
+    --tag-border-radius: 0;
+
+    /* 阴影收紧：像文件摞在文件上，不悬浮 */
+    --shadow-l1: 0 1px 0 rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+    --shadow-l2: 0 2px 0 rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.45);
+
+    /* 正文：等宽打字机 */
+    --base-font-family: "Cascadia Mono", "Consolas", "Sarasa Mono SC", "思源等宽",
+        "Noto Sans Mono CJK SC", "Microsoft YaHei", var(--sys-font-family), monospace;
+    --article-font-family: var(--base-font-family);
+
+    /* 打字机行距略宽，像稿纸 */
+    --article-line-height: 1.95;
+
+    /* 代码块：档案纸上的机打批注 */
+    --code-background-color: rgba(0, 0, 0, 0.45);
+    --code-text-color: rgba(212, 197, 176, 0.85);
+
+    /* 表格与引文：登记表和老摘要卡 */
+    --table-border-color: rgba(212, 197, 176, 0.2);
+    --tr-even-background-color: rgba(212, 197, 176, 0.04);
+    --blockquote-background-color: rgba(139, 0, 0, 0.08);
+}
+
+/* 库房亮灯模式（手动切换用）：档案台灯下的深铁灰 */
+&[data-scheme="light"] {
+    --body-background: #2A2C30;
+    --card-background: #35383D;
+    --body-text-color: #C9BEA9;
+    --card-text-color-main: #D4C5B0;
+    --card-text-color-secondary: rgba(212, 197, 176, 0.66);
+    --card-text-color-tertiary: rgba(212, 197, 176, 0.4);
+    --card-separator-color: rgba(212, 197, 176, 0.14);
+    --accent-color: #C24141;
+    --accent-color-darker: #8B0000;
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 二、微缩胶片噪点：盖在整页上的旧胶卷颗粒
+ *     纯 CSS 内联 SVG（feTurbulence），零请求，opacity 极低
+ * ════════════════════════════════════════════════════════════ */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 999; /* 盖在内容上但低于菜单弹出层，pointer-events 不拦 */
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='zr-grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23zr-grain)'/%3E%3C/svg%3E");
+    background-size: 240px 240px;
+    mix-blend-mode: overlay;
+}
+
+/* 减少动态效果时收起噪点层 */
+@media (prefers-reduced-motion: reduce) {
+    body::before {
+        display: none;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 三、标题：苏式宣传海报的方正黑体
+ *     （占位系统黑体加粗 + 收紧字距，之后可换自制标题字体）
+ * ════════════════════════════════════════════════════════════ */
+h1, h2, h3, h4, h5, h6,
+.site-name,
+.article-title,
+.section-title,
+.widget-title {
+    font-family: "Source Han Sans SC Heavy", "思源黑体 Heavy", "Microsoft YaHei UI",
+        "Microsoft YaHei", "PingFang SC", var(--base-font-family), sans-serif;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+}
+
+/* 文章大标题：海报式通栏 + 底部装订双线 */
+.article-title {
+    border-bottom: 3px double var(--accent-color-darker);
+    padding-bottom: 0.4em;
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 四、卡片：直角档案纸卡 + 边缘压痕 + 摞放阴影
+ * ════════════════════════════════════════════════════════════ */
+.main-container .card,
+.main-article,
+.widget,
+.pagination {
+    border: var(--archive-border);
+    box-shadow: var(--shadow-l1);
+}
+
+/* 档案卡悬浮：不漂浮，只沉一点影子，像被人从堆里抽出来 */
+.article-list article {
+    position: relative;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.2s ease;
+
+    &:hover {
+        border-color: rgba(194, 65, 65, 0.45);
+        box-shadow: var(--shadow-l2);
+        transform: translate(-1px, -1px);
+    }
+
+    &:active {
+        transform: translate(0, 0);
+        transition-duration: 0.1s;
+    }
+}
+
+/* 正文图片：直角 + 显影式变亮 */
+.article-content figure {
+    overflow: hidden;
+    border: var(--archive-border);
+
+    img {
+        transition: filter 0.45s ease;
+        filter: saturate(0.82) contrast(1.04);
+    }
+
+    &:hover img {
+        filter: saturate(1) contrast(1);
+    }
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 五、链接：血锈红下划线（钢笔批注感）
+ * ════════════════════════════════════════════════════════════ */
+.article-content a {
+    color: var(--accent-color);
+    text-decoration: underline;
+    text-decoration-color: rgba(194, 65, 65, 0.45);
+    text-underline-offset: 4px;
+    transition: color 0.2s ease, text-decoration-color 0.2s ease, background-color 0.2s ease;
+
+    &:hover {
+        color: var(--accent-color-darker);
+        text-decoration-color: currentColor;
+        background-color: rgba(139, 0, 0, 0.1);
+    }
+}
+
+/* 目录不抢戏：默认纸色，当前章节才盖红戳 */
+#TableOfContents a,
+.widget--toc a,
+.article-toc a {
+    color: var(--card-text-color-main);
+    text-decoration: none;
+    transition: color 0.2s ease, padding-left 0.2s ease;
+
+    &:hover {
+        color: var(--accent-color);
+    }
+}
+
+#TableOfContents li.active-class > a,
+.widget--toc li.active-class > a,
+.article-toc li.active-class > a {
+    color: var(--accent-color);
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 六、侧栏：登记窗口
+ * ════════════════════════════════════════════════════════════ */
+.sidebar header .site-name {
+    font-size: 2.4rem !important;
+    letter-spacing: 0.14em;
+}
+
+.sidebar header .site-description {
+    font-size: 1.05rem !important;
+    letter-spacing: 0.08em;
+    color: var(--card-text-color-secondary);
+}
+
+/* 头像占位（emoji ☸）：方框压痕，像贴照片的位置 */
+.site-avatar .emoji {
+    border: var(--archive-border);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* 菜单：钢印列表，悬停右移 + 盖红 */
+.left-sidebar .menu li a {
+    border-radius: 0;
+    transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+
+    &:hover {
+        transform: translateX(4px);
+        color: var(--accent-color);
+        background-color: rgba(139, 0, 0, 0.12);
+    }
+
+    &:active {
+        transform: translateX(2px);
+    }
+}
+
+/* 当前所在栏目：左侧血锈红装订条 */
+.left-sidebar .menu li.current > a {
+    color: var(--accent-color);
+    box-shadow: inset 3px 0 0 var(--accent-color-darker);
+    background-color: rgba(139, 0, 0, 0.1);
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 七、标签 / 分类：金属边框小方牌，悬停盖红戳
+ * ════════════════════════════════════════════════════════════ */
+.tag-cloud a,
+.article-tags a,
+.article-category a {
+    border: 1px solid rgba(212, 197, 176, 0.25);
+    border-radius: 0;
+    transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+
+    &:hover {
+        background-color: var(--accent-color-darker);
+        border-color: var(--accent-color-darker);
+        color: var(--accent-color-text);
+        transform: translateY(-2px);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+    }
+
+    &:active {
+        transform: translateY(0);
+        transition-duration: 0.1s;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 八、引用块：机密摘要卡——左侧双线装订 + 锈红纸底
+ * ════════════════════════════════════════════════════════════ */
+.article-content blockquote {
+    border-left: 3px double var(--accent-color-darker);
+    background: var(--blockquote-background-color);
+    font-style: normal;
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 九、表格：登记表样式——横线为主，表头盖深色
+ * ════════════════════════════════════════════════════════════ */
+.article-content table {
+    thead {
+        background: rgba(139, 0, 0, 0.18);
+
+        th {
+            border-bottom: 2px solid rgba(212, 197, 176, 0.3);
+        }
+    }
+
+    th, td {
+        border: none;
+        border-bottom: 1px solid var(--table-border-color);
+    }
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 十、按钮：钢印按钮——按下即盖
+ * ════════════════════════════════════════════════════════════ */
+button,
+.pagination a {
+    border-radius: 0;
+    transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+
+    &:hover {
+        box-shadow: 0 0 0 1px var(--accent-color-darker);
+    }
+
+    &:active {
+        transform: scale(0.96);
+        transition-duration: 0.08s;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 十一、正文选中文字：红戳底；滚动条：铁轨灰
+ * ════════════════════════════════════════════════════════════ */
+::selection {
+    background: rgba(139, 0, 0, 0.55);
+    color: #E8DFC8;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #161719;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #3A3D42;
+    border: 2px solid #161719;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-color-darker);
+}
+
+/* ════════════════════════════════════════════════════════════
+ * 十二、传阅 / 盖戳：注入元素的样式（配合 custom.ts）
+ * ════════════════════════════════════════════════════════════ */
+
+/* 档案卡右上角的传阅计数徽标（custom.ts 注入数字） */
+.zr-circulation {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    font-size: 1.2rem;
+    letter-spacing: 0.1em;
+    color: var(--card-text-color-tertiary);
+    border: 1px dashed rgba(212, 197, 176, 0.3);
+    padding: 0.15em 0.6em;
+    user-select: none;
+}
+
+/* 首页卡片右上角的传阅徽标：骑在装订线上 */
+.zr-circulation--card {
+    position: absolute;
+    top: 0.6em;
+    right: 0.8em;
+    background: rgba(17, 17, 17, 0.72);
+    backdrop-filter: blur(2px);
+}
+
+/* 文末「盖戳」栏：五角星 + 计数 */
+.article-circulation {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+
+    .zr-stamp-icon {
+        display: inline-flex;
+        color: var(--accent-color);
+        font-size: 1.5rem;
+        transform: rotate(-12deg); /* 手工盖章总会有点歪 */
+        transition: transform 0.25s ease, color 0.25s ease;
+    }
+
+    &:hover .zr-stamp-icon {
+        transform: rotate(-4deg) scale(1.08);
+        color: var(--accent-color-darker);
+    }
+}
+
+/* 「盖戳」点击涟漪：血锈红方形印泥扩散 */
+.zr-stamp-ripple {
+    position: absolute;
+    border: 2px solid var(--accent-color-darker);
+    border-radius: 0;
+    transform: scale(0);
+    opacity: 0.75;
+    pointer-events: none;
+    animation: zr-stamp 0.5s ease-out forwards;
+}
+
+@keyframes zr-stamp {
+    40% {
+        opacity: 0.55;
+    }
+
+    to {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+/* 点击处溅出的「显影颗粒」（银盐噪点） */
+.zr-grain {
+    position: fixed;
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+    .article-list article,
+    .article-content figure img,
+    .article-content a,
+    .left-sidebar .menu li a,
+    .tag-cloud a,
+    .article-tags a,
+    .article-category a,
+    button,
+    .pagination a {
+        transition: none !important;
+    }
+
+    .article-list article:hover,
+    .tag-cloud a:hover,
+    .article-tags a:hover,
+    .article-category a:hover {
+        transform: none;
+    }
+}

@@ -1,0 +1,28 @@
+<footer class="article-meta article-footer">
+    {{ partial "article/components/tags" . }}
+
+    {{/* ── 盖戳 + 传阅次数（钇·锆·拾遗 档案室定制）──
+         五角星戳记 + 本机传阅计数（由 assets/ts/custom.ts 填充数字） */}}
+    <section class="article-circulation inline-meta">
+        <span class="zr-stamp-icon" title="盖章传阅">
+            {{ partial "helper/icon" "stamp" }}
+        </span>
+        <span class="zr-circulation" data-mode="page">传阅 — 次</span>
+    </section>
+
+    {{ if and (.Site.Params.article.license.enabled) (not (eq .Params.license false)) }}
+    <section class="article-copyright inline-meta">
+        {{ partial "helper/icon" "copyright" }}
+        <span>{{ default .Site.Params.article.license.default .Params.license | markdownify }}</span>
+    </section>
+    {{ end }}
+
+    {{- if ne .Lastmod .Date -}}
+    <section class="article-lastmod inline-meta">
+        {{ partial "helper/icon" "clock" }}
+        <span>
+            {{ T "article.lastUpdatedOn" }} {{ .Lastmod | time.Format .Site.Params.dateFormat.lastUpdated }}
+        </span>
+    </section>
+    {{- end -}}
+</footer>
