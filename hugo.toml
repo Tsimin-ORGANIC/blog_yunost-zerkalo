@@ -12,8 +12,8 @@ theme = 'stack'
 canonifyURLs = true
 enableRobotsTXT = true
 
-# 网站描述（会出现在搜索引擎和社交分享卡片里）
-description = '钇·锆·拾遗 · Юность Зеркало —— 一间私人档案室：卷宗、摘录与被钉住的黄昏'
+# 网站描述（RSS 等处会用；主题的 meta description 见下面 params.description）
+description = '钇·锆·拾遗 · Юность Зеркало —— 捡一些碎片，为将来的过去拾遗补缺。'
 
 # 列表页默认取 content/posts/ 下的文章
 mainSections = ['posts']
@@ -57,6 +57,9 @@ copyright = 'Y-Zr · 本馆档案采用 CC BY-NC-SA 4.0 协议'
 
 # ── Stack 主题参数 ───────────────────────────────────────────
 [params]
+  # 搜索引擎与社交分享卡片上的站点描述
+  # （主题取的是 params.description；sidebar.subtitle 只负责侧栏那行小字）
+  description = '钇·锆·拾遗 · Юность Зеркало —— 捡一些碎片，为将来的过去拾遗补缺。'
   mainSections = ['posts']
   rssFullContent = true
 
