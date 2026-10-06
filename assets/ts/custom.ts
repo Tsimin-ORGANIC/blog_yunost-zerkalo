@@ -138,8 +138,25 @@ function setupCirculationCounter(): void {
     }
 }
 
+/** 案卷标签配色：锆蓝 / 丹砂红二选一，按标签名哈希决定——
+ *  同一个标签全站固定同色（纯前端确定性「随机」，无闪烁）。
+ *  分类章（.zr-file-tab）不参与，保持锆蓝。 */
+function paintTagChips(): void {
+    document.querySelectorAll<HTMLElement>('.article-tags a').forEach((el) => {
+        const name = (el.textContent || '').trim();
+        let hash = 5381;
+        for (let i = 0; i < name.length; i++) {
+            hash = (((hash << 5) + hash + name.charCodeAt(i)) | 0);
+        }
+        if (Math.abs(hash) % 2 === 1) {
+            el.classList.add('zr-tag--cinnabar');
+        }
+    });
+}
+
 window.addEventListener('load', () => {
     setTimeout(setupClickEffects, 0);
+    paintTagChips();
     setupCirculationCounter();
 });
 

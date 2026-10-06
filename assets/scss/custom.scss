@@ -63,9 +63,9 @@
  * 一、配色：暗夜库房 + 褪色纸卡 + 血锈红戳记
  * ════════════════════════════════════════════════════════════ */
 :root {
-    /* 库房地面：暗夜黑；纸卡：黑夜里翻出的一叠档案（深铁灰） */
-    --body-background: #111111;
-    --card-background: #2A2C30;
+    /* 库房地面：铁灰蓝；纸卡：亮一档的灰蓝——纸字浮出库房的强对比版 */
+    --body-background: #2A2C30;
+    --card-background: #35383D;
 
     /* 褪色的泛黄纸字（老档案上的钢笔水） */
     --body-text-color: #D4C5B0;
@@ -253,6 +253,38 @@ h1, h2, h3, h4, h5, h6,
     }
 }
 
+/* 库房货架（分类/标签页的 compact 列表）：整排卷宗的抽阅高亮——
+   行底泛起锈红、左侧压一条红装订线、标题盖章变红 */
+.article-list--compact article {
+    position: relative;
+    transition: background-color 0.2s ease, box-shadow 0.25s ease;
+
+    &:hover {
+        background: rgba(139, 0, 0, 0.07);
+        box-shadow: inset 3px 0 0 var(--accent-color);
+    }
+
+    &:hover .article-title a {
+        color: var(--accent-color);
+        opacity: 1;
+    }
+}
+
+/* 分类页顶部的档案大卡（tile）：同首页卡片，可以从堆里抽出来 */
+.article-list--tile article {
+    transition: box-shadow 0.25s ease, transform 0.2s ease;
+
+    &:hover {
+        box-shadow: var(--shadow-l2);
+        transform: translate(-1px, -1px);
+    }
+
+    &:hover .article-title a {
+        color: var(--accent-color);
+        opacity: 1;
+    }
+}
+
 /* ════════════════════════════════════════════════════════════
  * 五、链接：血锈红下划线（钢笔批注感）
  * ════════════════════════════════════════════════════════════ */
@@ -356,6 +388,24 @@ h1, h2, h3, h4, h5, h6,
     &:active {
         transform: translateY(0);
         transition-duration: 0.1s;
+    }
+}
+
+/* 丹砂红变体：custom.ts 按标签名哈希分配，同一个标签全站固定同色。
+   档案分类章（.zr-file-tab）保持锆蓝，标签在锆蓝/丹砂之间随机 */
+.zr-tag--cinnabar {
+    --chip-ink: #D98B7A;
+    --chip-bg: rgba(158, 60, 45, 0.16);
+    --chip-border: rgba(158, 60, 45, 0.55);
+    --chip-fill: #9E3C2D;
+    --chip-fill-text: #F2E4CF;
+
+    [data-scheme="light"] & {
+        --chip-ink: #8B2A1E;
+        --chip-bg: rgba(139, 42, 30, 0.08);
+        --chip-border: rgba(139, 42, 30, 0.5);
+        --chip-fill: #8B2A1E;
+        --chip-fill-text: #F7F6DC;
     }
 }
 
