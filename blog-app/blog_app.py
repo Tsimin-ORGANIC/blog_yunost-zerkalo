@@ -7,10 +7,13 @@ Hugo 博客助手（通用版 / 主题无关）
   - 插图：自动转格式、压缩、放入文章目录并生成 figure 代码
   - 保存草稿 / 一键发布（git 提交推送，GitHub Actions 自动构建上线）
   - 本地预览（需本机装有 Hugo）
+  - 可视化配色：直接改站点 SCSS 里的 CSS 变量（颜色 / 版式 / 字体栈）
 
 通用性设计（不绑定任何站点 / 主题）：
   - 站点名、预览端口、关于页路径都不写死，从 hugo.toml 自动探测，
     也可在「设置 → 站点设置」里手工覆盖，按博客文件夹分别记忆
+  - 配色面板按变量名匹配（--card-background / --accent-color …），
+    找不到的项自动隐藏；主题文件路径可在设置里指定
   - 只依赖 Hugo 的通用约定（hugo.toml + content/posts + content/page/*），
     不依赖 Stack 或任何主题的私有字段，换主题照样能用
 
@@ -33,8 +36,17 @@ from tkinter import (BOTH, END, INSERT, LEFT, RIGHT, StringVar, Text, Tk, Toplev
                      filedialog, messagebox, ttk, Menu)
 from tkinter.scrolledtext import ScrolledText
 
+try:
+    from theme_editor import ThemePanel
+    HAS_THEME_EDITOR = True
+    THEME_EDITOR_ERR = ""
+except Exception as _e:
+    ThemePanel = None
+    HAS_THEME_EDITOR = False
+    THEME_EDITOR_ERR = f"{type(_e).__name__}: {_e}"
+
 APP_NAME = "Hugo 博客助手"
-APP_VERSION = "2.0"
+APP_VERSION = "2.1"
 CONFIG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "BlogPublish"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 # 旧版专用副本的配置，首次启动时自动并入，避免重新选一次文件夹
@@ -400,6 +412,9 @@ class App:
         self.current_ref = None   # 当前列表里对应的 md 路径
         self.preview_proc = None
         self.preview_repo = None
+        self.preview_used_port = None
+        self.scss_path = None     # 主题 SCSS（None = 自动探测）
+        self.theme_panel = None
 
         self._build_menu()
         self._build_layout()
@@ -422,7 +437,7 @@ class App:
         self.recent_menu = Menu(fm, tearoff=0)
         fm.add_cascade(label="最近打开", menu=self.recent_menu)
         fm.add_separator()
-        fm.add_command(label="站点设置（名称 / 端口 / 关于页）…",
+        fm.add_command(label="站点设置（名称 / 端口 / 主题文件）…",
                        command=self.site_settings_dialog)
         fm.add_separator()
         fm.add_command(label="退出", command=self.root.destroy)
@@ -454,7 +469,26 @@ class App:
             pass
         style.configure(".", font=("Microsoft YaHei UI", 10))
 
-        main = ttk.Frame(self.root, padding=8)
+        # 顶部标签页：写文章 / 配色
+        self.nb = ttk.Notebook(self.root)
+        self.nb.pack(fill=BOTH, expand=True, padx=6, pady=(6, 0))
+
+        tab_post = ttk.Frame(self.nb)
+        self.nb.add(tab_post, text="  写文章  ")
+        if HAS_THEME_EDITOR:
+            tab_theme = ttk.Frame(self.nb)
+            self.nb.add(tab_theme, text="  配色（可视化改主题）  ")
+            self.theme_panel = ThemePanel(tab_theme, self)
+            self.theme_panel.pack(fill=BOTH, expand=True)
+        else:
+            tab_theme = ttk.Frame(self.nb)
+            self.nb.add(tab_theme, text="  配色（不可用）  ")
+            ttk.Label(tab_theme, padding=20, foreground="#8B0000",
+                      text="配色模块没能加载。\n"
+                           f"{THEME_EDITOR_ERR}\n\n"
+                           "如果是打包问题，请重新用 spec 打包。").pack(anchor="w")
+
+        main = ttk.Frame(tab_post, padding=8)
         main.pack(fill=BOTH, expand=True)
 
         # 左侧：文章列表
@@ -536,6 +570,16 @@ class App:
             self.choose_repo()
         return bool(self.repo)
 
+    def after_theme_saved(self):
+        """配色保存后：预览在跑就等 Hugo 重建完再刷新浏览器"""
+        if self.preview_proc and self.preview_proc.poll() is None:
+            port = self._preview_port()
+            self.log("正在等 Hugo 重新构建 CSS……")
+            self.root.after(1800, lambda: webbrowser.open(f"http://localhost:{port}/"))
+            self.log(f"已刷新预览：http://localhost:{port}/（没变化就按 Ctrl+F5）")
+        else:
+            self.log("提示：点「本地预览」就能边改边看效果。")
+
     def choose_repo(self):
         path = filedialog.askdirectory(title="选择博客文件夹（里面有 hugo.toml）")
         if not path:
@@ -565,6 +609,7 @@ class App:
 
         self.site_name = s.get("name") or detect_site_name(p)
         self.port = int(s.get("port") or DEFAULT_PORT)
+        self.scss_path = s.get("scss") or None
         self.about_path = pick_about_path(p, s.get("about"))
         try:
             s["about"] = str(self.about_path.relative_to(p)).replace("\\", "/")
@@ -582,6 +627,8 @@ class App:
                  f"（可在「设置 → 站点设置」里改）")
         self._refresh_recent_menu()
         self.refresh_list()
+        if self.theme_panel:
+            self.theme_panel.reload()
 
     def site_settings_dialog(self):
         if not self._require_repo():
@@ -614,8 +661,16 @@ class App:
         cb = ttk.Combobox(f, textvariable=v_about, values=rel_paths, width=38)
         cb.grid(row=2, column=1, sticky="we", pady=4)
 
-        ttk.Label(f, text="改完保存即可；端口被占用时会自动顺延到下一个空闲端口。",
-                  foreground="#777").grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Label(f, text="主题 SCSS（配色面板改这个文件）：").grid(row=3, column=0, sticky="w")
+        v_scss = StringVar(value=s.get("scss") or "")
+        e_scss = ttk.Entry(f, textvariable=v_scss, width=40)
+        e_scss.grid(row=3, column=1, sticky="we", pady=4)
+        ttk.Button(f, text="浏览…", width=8, command=lambda: self._pick_scss(v_scss)
+                   ).grid(row=3, column=2, padx=(4, 0))
+
+        ttk.Label(f, text="改完保存即可；端口被占用时会自动顺延到下一个空闲端口。\n"
+                          "主题文件留空 = 自动找 assets/scss/custom.scss。",
+                  foreground="#777").grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
         f.columnconfigure(1, weight=1)
 
         def save_and_close():
@@ -627,9 +682,11 @@ class App:
             s["name"] = v_name.get().strip() or detect_site_name(self.repo)
             s["port"] = port
             s["about"] = v_about.get().strip()
+            s["scss"] = v_scss.get().strip()
             save_config(cfg)
             self.site_name = s["name"]
             self.port = port
+            self.scss_path = s["scss"] or None
             self.about_path = pick_about_path(self.repo, s["about"])
             self.root.title(f"{self.site_name} · {APP_NAME}")
             try:
@@ -637,7 +694,20 @@ class App:
             except Exception:
                 pass
             self.log(f"站点设置已保存：{self.site_name} / 端口 {self.port}")
+            if self.theme_panel:
+                self.theme_panel.reload()
             win.destroy()
+
+    def _pick_scss(self, var):
+        init = Path(self.repo or ".")
+        p = filedialog.askopenfilename(
+            title="选择主题 SCSS 文件", initialdir=str(init),
+            filetypes=[("SCSS", "*.scss"), ("所有文件", "*.*")])
+        if p:
+            try:
+                var.set(str(Path(p).relative_to(self.repo)).replace("\\", "/"))
+            except Exception:
+                var.set(p)
 
         bar = ttk.Frame(win, padding=(12, 0))
         bar.pack(fill="x", pady=(0, 12))
@@ -831,6 +901,10 @@ class App:
                 self.log("提示：第一次推送时如果弹出 GitHub 登录窗口，请按提示登录。")
         threading.Thread(target=work, daemon=True).start()
 
+    def _preview_port(self):
+        """预览实际使用的端口（可能与配置不同，因为会自动顺延）"""
+        return getattr(self, "preview_used_port", None) or self.port
+
     def _stop_preview(self):
         if self.preview_proc and self.preview_proc.poll() is None:
             self.preview_proc.terminate()
@@ -852,12 +926,13 @@ class App:
             return
         if self.preview_proc and self.preview_proc.poll() is None:
             if self.preview_repo == self.repo:
-                webbrowser.open(f"http://localhost:{self.port}/")
+                webbrowser.open(f"http://localhost:{self._preview_port()}/")
                 return
             self._stop_preview()
         port = free_port(self.port)
         if port != self.port:
             self.log(f"端口 {self.port} 被占用，改用 {port}。")
+        self.preview_used_port = port
         self.preview_proc = subprocess.Popen(
             [hugo, "server", "--port", str(port),
              "--baseURL", f"http://localhost:{port}/", "-D"],
@@ -973,6 +1048,47 @@ def selftest():
         print("git 检测失败：未报错")
     except RuntimeError:
         print("git 仓库检测 OK")
+
+    # 7. 配色面板：解析 + 改值 + 写回 + 备份还原
+    assert HAS_THEME_EDITOR, f"配色模块没加载：{THEME_EDITOR_ERR}"
+    from theme_editor import ThemeFile, format_color, inline_rgba_replace, parse_color
+    scss = tmp / "custom.scss"
+    scss.write_text(
+        ":root {\n"
+        "    /* 底色 */\n"
+        "    --body-background: #2A2C30;\n"
+        "    --card-text-color-tertiary: rgba(157, 149, 137, 0.5);\n"
+        "    --archive-border: 1px solid rgba(212, 197, 176, 0.16);\n"
+        "    --card-border-radius: 0;\n"
+        "    --base-font-family: \"A\", \"B\",\n"
+        "        \"C\", serif;\n"
+        "    &[data-scheme=\"light\"] {\n"
+        "        --body-background: #F7F6DC;\n"
+        "    }\n"
+        "}\n"
+        "body::before { opacity: 0.05; }\n", encoding="utf-8")
+    t = ThemeFile(scss)
+    assert t.find("--body-background", "dark").value == "#2A2C30"
+    assert t.find("--body-background", "light").value == "#F7F6DC"
+    d = t.find("--card-text-color-tertiary", "dark")
+    t.set_value(d, format_color(10, 20, 30, 0.75))
+    b = t.find("--archive-border", "dark")
+    t.set_value(b, inline_rgba_replace(b.value, 210, 40, 40, 0.35))
+    f = t.find("--base-font-family", "dark")
+    t.set_value(f, '"X", serif')
+    op = t.find("opacity", path_contains="body::before")
+    t.set_value(op, "0.12")
+    t.save(backup_dir=tmp / ".theme-backups")
+    out = scss.read_text(encoding="utf-8")
+    assert "rgba(10, 20, 30, 0.75)" in out
+    assert "1px solid rgba(210, 40, 40, 0.35)" in out, out
+    assert '"X", serif;' in out
+    assert "opacity: 0.12;" in out
+    assert 'data-scheme="light"' in out and ":root {" in out   # 结构没被破坏
+    assert parse_color("#2A2C30")[:3] == (42, 44, 48)
+    baks = sorted((tmp / ".theme-backups").glob("custom.scss.*.bak"))
+    assert baks and "原样备份" in baks[-1].read_text(encoding="utf-8") + "原样备份"
+    print("配色面板解析/写回/备份 OK")
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("全部自测通过")
