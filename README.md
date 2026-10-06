@@ -1,7 +1,7 @@
 # 钇·锆·拾遗
 
 > **Yunost Zerkalo** · Юность Зеркало · **Y-Zr**
-> 一间私人档案室：卷宗、摘录与被钉住的黄昏。
+> 捡一些碎片，为将来的过去拾遗补缺。
 
 基于 [Hugo](https://gohugo.io/) 与 [Stack 主题](https://github.com/CaiJimmy/hugo-theme-stack) 的个人博客，视觉基调为「列宁格勒档案室」：暗夜库房底色、褪色纸卡、血锈红戳记、直角卡片与微缩胶片噪点。
 
