@@ -68,7 +68,7 @@ copyright = 'Y-Zr · 本馆档案采用 CC BY-NC-SA 4.0 协议'
     # 档案编号章（代替原来的小表情）
     emoji = '☸'
     # 侧栏名字下面的一行小字
-    subtitle = 'Юность Зеркало · 卷宗 No. Y-Zr'
+    subtitle = 'Юность Зеркало'
 
   # 文章页
   [params.article]
