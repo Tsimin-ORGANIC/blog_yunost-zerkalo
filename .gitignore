@@ -18,3 +18,6 @@ assets/scss/.theme-backups/
 # 系统文件
 .DS_Store
 Thumbs.db
+
+# Hugo 构建时自动生成的编辑器提示文件（含本机路径，不该进仓库）
+assets/jsconfig.json
