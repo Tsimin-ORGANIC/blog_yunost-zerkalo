@@ -83,6 +83,20 @@
     /* 氧化锆蓝：备用状态色（检索、冷静态悬停） */
     --zircon-blue: #4E729E;
 
+    /* 案卷标签（锆蓝墨戳）：分类/标签小方牌统一用 */
+    --chip-ink: #A8C0DC;
+    --chip-bg: rgba(78, 114, 158, 0.14);
+    --chip-border: rgba(78, 114, 158, 0.5);
+    --chip-fill: #4E729E;
+    --chip-fill-text: #10141A;
+
+    /* 滚动条：铁轨灰 */
+    --scrollbar-track: #161719;
+    --scrollbar-thumb: #3A3D42;
+
+    /* 卡片右上角传阅徽标的底色（骑在装订线上，随明暗切换） */
+    --circ-badge-bg: rgba(17, 17, 17, 0.72);
+
     /* 装订线：档案卡片边缘的一圈压痕 */
     --archive-border: 1px solid rgba(212, 197, 176, 0.16);
 
@@ -115,17 +129,41 @@
     --tr-even-background-color: rgba(212, 197, 176, 0.04);
     --blockquote-background-color: rgba(139, 0, 0, 0.08);
 
-    /* 库房亮灯模式（手动切换用）：档案台灯下的深铁灰 */
+    /* 库房亮灯模式：在档案纸上写字——泛黄卷宗纸 + 墨黑字 + 深红戳记 */
     &[data-scheme="light"] {
-        --body-background: #2A2C30;
-        --card-background: #35383D;
-        --body-text-color: #C9BEA9;
-        --card-text-color-main: #D4C5B0;
-        --card-text-color-secondary: rgba(212, 197, 176, 0.66);
-        --card-text-color-tertiary: rgba(212, 197, 176, 0.4);
-        --card-separator-color: rgba(212, 197, 176, 0.14);
-        --accent-color: #C24141;
-        --accent-color-darker: #8B0000;
+        --body-background: #F7F6DC;
+        --card-background: #FCFAEA;
+
+        --body-text-color: #26241E;
+        --card-text-color-main: #1F1D18;
+        --card-text-color-secondary: rgba(31, 29, 24, 0.72);
+        --card-text-color-tertiary: rgba(31, 29, 24, 0.5);
+        --card-separator-color: rgba(31, 29, 24, 0.16);
+        --card-background-selected: rgba(31, 29, 24, 0.06);
+
+        /* 纸面上的血锈红要压深才压得住纸色 */
+        --accent-color: #8B0000;
+        --accent-color-darker: #5E0000;
+        --accent-color-text: #F7F6DC;
+
+        --archive-border: 1px solid rgba(31, 29, 24, 0.22);
+        --table-border-color: rgba(31, 29, 24, 0.25);
+        --tr-even-background-color: rgba(31, 29, 24, 0.04);
+        --blockquote-background-color: rgba(139, 0, 0, 0.06);
+        --code-background-color: rgba(31, 29, 24, 0.08);
+        --code-text-color: rgba(31, 29, 24, 0.85);
+
+        /* 案卷标签：纸上的锆蓝墨 */
+        --chip-ink: #2E5482;
+        --chip-bg: rgba(78, 114, 158, 0.1);
+        --chip-border: rgba(46, 84, 130, 0.55);
+        --chip-fill: #2E5482;
+        --chip-fill-text: #F7F6DC;
+
+        --scrollbar-track: #E9E6C8;
+        --scrollbar-thumb: #C2BD97;
+
+        --circ-badge-bg: rgba(247, 246, 220, 0.85);
     }
 }
 
@@ -295,21 +333,24 @@ h1, h2, h3, h4, h5, h6,
 }
 
 /* ════════════════════════════════════════════════════════════
- * 七、标签 / 分类：金属边框小方牌，悬停盖红戳
+ * 七、案卷标签：分类 / 标签统一锆蓝墨戳（替代主题的哈希随机配色）
  * ════════════════════════════════════════════════════════════ */
 .tag-cloud a,
 .article-tags a,
-.article-category a {
-    border: 1px solid rgba(212, 197, 176, 0.25);
+.article-category a,
+.zr-file-tab {
+    background: var(--chip-bg);
+    border: 1px solid var(--chip-border);
     border-radius: 0;
+    color: var(--chip-ink);
     transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 
     &:hover {
-        background-color: var(--accent-color-darker);
-        border-color: var(--accent-color-darker);
-        color: var(--accent-color-text);
+        background: var(--chip-fill);
+        border-color: var(--chip-fill);
+        color: var(--chip-fill-text);
         transform: translateY(-2px);
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
     }
 
     &:active {
@@ -377,12 +418,12 @@ button,
 }
 
 ::-webkit-scrollbar-track {
-    background: #161719;
+    background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #3A3D42;
-    border: 2px solid #161719;
+    background: var(--scrollbar-thumb);
+    border: 2px solid var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -411,7 +452,7 @@ button,
     position: absolute;
     top: 0.6em;
     right: 0.8em;
-    background: rgba(17, 17, 17, 0.72);
+    background: var(--circ-badge-bg);
     backdrop-filter: blur(2px);
 }
 
