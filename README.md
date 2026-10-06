@@ -57,9 +57,82 @@ python -m PyInstaller --noconfirm 博客助手.spec   :: 必须走 spec，theme_
 
 ## 部署
 
-1. 推送到 GitHub 后，在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**
-2. `.github/workflows/deploy.yml` 会在每次 push 时自动构建发布
-3. 主题已直接打包在本仓库 `themes/stack/` 内（非子模块），clone 即用，无需 `git submodule update --init`
+- 线上地址：<https://tsimin-organic.github.io/blog_yunost-zerkalo/>
+- `.github/workflows/deploy.yml` 在每次 push 时自动构建发布
+- Pages 由 `configure-pages` 的 `enablement: true` **自动开启**，不用手动去 Settings 选 Source
+- 主题已直接打包在本仓库 `themes/stack/` 内（非子模块），clone 即用，无需 `git submodule update --init`
+- 上传方式：双击 `上传到GitHub.bat`，或在助手里点「🌐 发布到 GitHub」
+
+## 踩坑记录（换电脑重来时先看这里）
+
+全是一次次撞出来的，按坑的类型分组。
+
+### 一、上传到 GitHub
+
+- **建仓库必须建空的。** 别勾 `Add README` / `.gitignore` / `license` —— 勾了远程就先有一个自己的提交，和本地没有共同祖先，push 会直接
+  `! [rejected] main -> main (fetch first)`。许可证从本地加进去一起推才对。
+- **GitHub 从 2021 年起不接受账号密码。** 输密码必然报
+  `Password authentication is not supported for Git operations`。
+  只能用浏览器授权，或用访问令牌（Settings → Developer settings → Personal access tokens → 勾 `repo`）。
+- **浏览器授权必须点完。** GCM 打出 `please complete authentication in your browser...` 之后，
+  如果没在网页里点绿色的 `Authorize`，就会 `fatal: 已取消一个任务`，
+  然后 git 退回命令行问账号密码 —— 而那条路是死的（见上一条）。
+- **提交邮箱别用裸用户名格式。** `yzr@users.noreply.github.com` 会被 GitHub 模糊匹配到
+  用户名恰好叫 `yzr` 的**陌生人**，提交不算你的。正确格式要带数字 ID：
+
+  ```powershell
+  # ID 从 https://api.github.com/users/你的用户名 拿
+  git config user.email "312572725+Tsimin-ORGANIC@users.noreply.github.com"
+  ```
+
+- **改历史里已经写错的作者**：
+
+  ```powershell
+  $env:GIT_SEQUENCE_EDITOR = 'true'    # 不加这句 rebase 会开编辑器卡住
+  git rebase --root --exec "git commit --amend --no-edit --reset-author"
+  git diff origin/main HEAD            # 必须是空的：只改了作者，没改内容
+  git push --force-with-lease origin main   # 比 --force 安全：远程被别人动过会拒绝
+  ```
+
+### 二、Windows 脚本
+
+- **`.bat` 里不要写中文。** cmd.exe 解析多字节 UTF-8 的批处理会错位断行，报出
+  `'hub.com' is not recognized` 这种莫名其妙的错。
+  做法：`.bat` 只当纯 ASCII 启动器，中文逻辑放进 `.ps1`。
+- **`.ps1` 必须存成 UTF-8 带 BOM。** 否则 PowerShell 5.1 会按 GBK 解码，
+  中文全乱并连带引发语法错误（`The string is missing the terminator`）。
+- **PowerShell 里 `$home` 是只读变量**，不能赋值，换个名字（比如 `$html`）。
+- **`if (git diff --quiet ...)` 判断的是输出而不是退出码。** 命令没输出会被当成假，
+  要判断成败得用 `$LASTEXITCODE`。
+
+### 三、Hugo 与内容
+
+- **`draft: true` 的页面在生产构建里会消失。** 本地 `hugo server -D` 带 `-D` 参数，
+  草稿也显示；GitHub Actions 构建不带 `-D`，于是线上直接没有这个页面。
+  发文章前搜一遍 `draft: true`。
+- **`public/` 会残留多份哈希 CSS。** Hugo 增量构建不清旧的，`--gc` 也不清。
+  验证视觉改动时**要看 `index.html` 实际引用的那一份**，否则会被旧文件骗。
+  彻底干净的做法：删掉整个 `public/` 重新构建。
+- **主题的 meta description 取的是 `params.description`**，顶层 `description` 它不读——
+  写在顶层等于没写。
+- **Hugo 的 minifier 会改大小写**：hex 颜色转大写、字体名转小写。
+  写 `.Contains()` 之类的检查时要按这个预期来。
+- **改了 `hugo.toml` 要重启 `hugo server`**，配置项的热重载不可靠。
+
+### 四、打包助手
+
+- **必须走 spec**：`python -m PyInstaller --noconfirm 博客助手.spec`。
+  直接 `PyInstaller blog_app.py` 会漏掉 `theme_editor`（运行时才 import 的模块），
+  打出来的 exe 配色页会整块消失。spec 里已声明 `hiddenimports=['theme_editor']`。
+- **打包前先关掉正在运行的助手**，exe 被占用会 `PermissionError: [WinError 5]`。
+- **打包前跑一遍自测**：`python blog_app.py --selftest`
+  （里面有 GUI 构造检查，能抓到"属性在赋值前被引用"这类只在运行时才炸的错）。
+
+### 五、预览端口
+
+- 助手内置端口探测：配置的端口被占用时会自动顺延到下一个空闲端口，并在消息栏告诉你实际地址。
+- `预览.bat` 的端口是写死的，双击两次必然撞车（`bind: Only one usage of each socket address`）。
+  先看浏览器能不能打开 1314，能打开就说明已经在跑了，不用再启动。
 
 ## 视觉规范速查
 
@@ -68,11 +141,17 @@ python -m PyInstaller --noconfirm 博客助手.spec   :: 必须走 spec，theme_
 | 主背景（暗） | `#2A2C30`（铁灰蓝库房） |
 | 卡片（暗） | `#36383D`（亮一档灰蓝纸卡，直角 + 装订线压痕） |
 | 主背景（亮） | `#F7F6DC`（泛黄档案纸） |
-| 正文 | `#D4C5B0`（暗）/ 墨黑 `#1F1D18`（亮），Times + 华文仿宋打字机体 |
+| 卡片（亮） | `#FCFAEA` |
+| 正文主色（暗） | `#D3C4B0`（褪色纸字） |
+| 描述 / 次要文字（暗） | `#9D9589`（暖灰） |
+| 正文（亮） | `#1F1D18`（墨黑） |
 | 强调 | `#8B0000` / `#C24141`（血锈红，仅链接、戳记、警告） |
 | 备用强调 | `#4E729E`（氧化锆蓝）、`#9E3C2D`（丹砂红，标签章随机色之一） |
 | 标题字体 | 方正姚体（苏式海报方正骨架，子集化 woff2） |
 | 噪点 | 内联 SVG feTurbulence 胶片颗粒，opacity 0.05 |
+
+> 改这些值不用手改代码：打开助手的「配色」标签页，选色保存即可（会自动备份到
+> `assets/scss/.theme-backups/`，可一键还原）。上表只是速查。
 
 ## 字体
 
