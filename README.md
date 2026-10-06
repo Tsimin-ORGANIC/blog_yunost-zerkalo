@@ -41,11 +41,25 @@
 | --- | --- |
 | 主背景 | `#111111`（暗夜库房） |
 | 卡片 | `#2A2C30`（深铁灰纸卡，直角 + 装订线压痕） |
-| 正文 | `#D4C5B0`（褪色纸色，等宽打字机体） |
+| 正文 | `#D4C5B0`（褪色纸色，Times + 华文仿宋打字机体） |
 | 强调 | `#8B0000` / `#C24141`（血锈红，仅链接、戳记、警告） |
 | 备用强调 | `#4E729E`（氧化锆蓝） |
-| 标题字体 | 占位系统黑体加粗（后续换苏式海报标题字体） |
+| 标题字体 | 方正姚体（苏式海报方正骨架，子集化 woff2） |
 | 噪点 | 内联 SVG feTurbulence 胶片颗粒，opacity 0.05 |
+
+## 字体
+
+站内字体全部为 Windows 系统字体的**子集化 woff2**（GB2312 全部汉字 + 站内实际用字 + 西里尔字母）：
+
+| 文件 | 来源 | 用途 |
+| --- | --- | --- |
+| `FZYaoTi-subset.woff2` | 方正姚体 `FZYTK.TTF` | 标题（苏式海报骨架） |
+| `STFangsong-subset.woff2` | 华文仿宋 `STFANGSO.TTF` | 正文汉字（公文打字机） |
+| `Times*-subset.woff2` ×4 | Times New Roman 四体 | 拉丁与西里尔（Юность Зеркало） |
+
+- 重新生成：`python tools/subset-fonts.py`（依赖 `pip install fonttools brotli`，需本机装有上述系统字体）
+- 写了生僻字？先 `python tools/subset-fonts.py --check` 查缺字，再重跑生成
+- 字体渲染层级见 `assets/scss/custom.scss` 的「〇、字体」一节
 
 ## 版权与许可
 

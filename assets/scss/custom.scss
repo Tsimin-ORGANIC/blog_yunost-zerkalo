@@ -5,6 +5,61 @@
  */
 
 /* ════════════════════════════════════════════════════════════
+ * 〇、字体：方正姚体（标题）· 华文仿宋（正文）· Times（拉丁与西里尔）
+ *     子集化 woff2 由 tools/subset-fonts.py 生成，放在 static/fonts/
+ *     CSS 产物在 /scss/ 下，用 ../fonts/ 相对路径可同时兼容本地与 GitHub Pages 子路径
+ * ════════════════════════════════════════════════════════════ */
+
+/* 标题：方正姚体 —— 苏式宣传海报的方正骨架 */
+@font-face {
+    font-family: "FangYao Arch";
+    src: url("../fonts/FZYaoTi-subset.woff2") format("woff2");
+    font-weight: 400 900;
+    font-display: swap;
+}
+
+/* 正文：华文仿宋 —— 老式公文打字机 */
+@font-face {
+    font-family: "FangSong Arch";
+    src: url("../fonts/STFangsong-subset.woff2") format("woff2");
+    font-weight: 400;
+    font-display: swap;
+}
+
+/* 拉丁与西里尔：Times New Roman，档案译本腔（Юность Зеркало 就靠它） */
+@font-face {
+    font-family: "Times Arch";
+    src: url("../fonts/Times-subset.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Times Arch";
+    src: url("../fonts/TimesBD-subset.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Times Arch";
+    src: url("../fonts/TimesItalic-subset.woff2") format("woff2");
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Times Arch";
+    src: url("../fonts/TimesBoldItalic-subset.woff2") format("woff2");
+    font-weight: 700;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* ════════════════════════════════════════════════════════════
  * 一、配色：暗夜库房 + 褪色纸卡 + 血锈红戳记
  * ════════════════════════════════════════════════════════════ */
 :root {
@@ -39,10 +94,14 @@
     --shadow-l1: 0 1px 0 rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
     --shadow-l2: 0 2px 0 rgba(0, 0, 0, 0.55), 0 6px 14px rgba(0, 0, 0, 0.45);
 
-    /* 正文：等宽打字机 */
-    --base-font-family: "Cascadia Mono", "Consolas", "Sarasa Mono SC", "思源等宽",
-        "Noto Sans Mono CJK SC", "Microsoft YaHei", var(--sys-font-family), monospace;
+    /* 正文：Times 打拉丁/西里尔，汉字落华文仿宋（公文打字机腔） */
+    --base-font-family: "Times Arch", "Times New Roman", "FangSong Arch",
+        "STFangsong", "华文仿宋", "FangSong", "仿宋", "FangSong_GB2312",
+        var(--sys-font-family), serif;
     --article-font-family: var(--base-font-family);
+
+    /* 仿宋笔画偏细，正文放大半档保证暗底可读 */
+    --article-font-size: 1.75rem;
 
     /* 打字机行距略宽，像稿纸 */
     --article-line-height: 1.95;
@@ -94,16 +153,15 @@ body::before {
 }
 
 /* ════════════════════════════════════════════════════════════
- * 三、标题：苏式宣传海报的方正黑体
- *     （占位系统黑体加粗 + 收紧字距，之后可换自制标题字体）
+ * 三、标题：方正姚体 —— 苏式宣传海报的方正骨架
  * ════════════════════════════════════════════════════════════ */
 h1, h2, h3, h4, h5, h6,
 .site-name,
 .article-title,
 .section-title,
 .widget-title {
-    font-family: "Source Han Sans SC Heavy", "思源黑体 Heavy", "Microsoft YaHei UI",
-        "Microsoft YaHei", "PingFang SC", var(--base-font-family), sans-serif;
+    font-family: "FangYao Arch", "FZYaoTi", "方正姚体", "FangYao",
+        "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
     font-weight: 900;
     letter-spacing: 0.06em;
 }
