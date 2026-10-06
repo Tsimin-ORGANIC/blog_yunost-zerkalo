@@ -65,15 +65,15 @@
 :root {
     /* 库房地面：铁灰蓝；纸卡：亮一档的灰蓝——纸字浮出库房的强对比版 */
     --body-background: #2A2C30;
-    --card-background: #35383D;
+    --card-background: #36383D;
 
-    /* 褪色的泛黄纸字（老档案上的钢笔水） */
-    --body-text-color: #D4C5B0;
-    --card-text-color-main: #D4C5B0;
-    --card-text-color-secondary: rgba(212, 197, 176, 0.68);
-    --card-text-color-tertiary: rgba(212, 197, 176, 0.42);
-    --card-separator-color: rgba(212, 197, 176, 0.14);
-    --card-background-selected: rgba(212, 197, 176, 0.08);
+    /* 褪色的泛黄纸字（按定稿截图校准：标题 #D3C4B0 · 描述 #9D9589） */
+    --body-text-color: #D3C4B0;
+    --card-text-color-main: #D3C4B0;
+    --card-text-color-secondary: #9D9589;
+    --card-text-color-tertiary: rgba(157, 149, 137, 0.5);
+    --card-separator-color: rgba(157, 149, 137, 0.18);
+    --card-background-selected: rgba(211, 196, 176, 0.08);
 
     /* 血锈红：只给链接、戳记和警告状态（在泛黄纸上够醒目，又不刺眼） */
     --accent-color: #C24141;
