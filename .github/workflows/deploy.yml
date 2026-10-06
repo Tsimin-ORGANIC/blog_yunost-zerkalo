@@ -40,6 +40,9 @@ jobs:
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
+        with:
+          # 仓库还没开 Pages 时自动开启（省掉手动去 Settings 里点）
+          enablement: true
 
       - name: Build
         run: hugo --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
