@@ -237,8 +237,10 @@ def build_front_matter(meta):
     def q(s):
         return '"' + str(s).replace('"', '\\"') + '"'
     lines = ["---",
-             f"title: {q(meta['title'])}",
-             f"date: {q(meta['date'])}"]
+             f"title: {q(meta['title'])}"]
+    # 日期为空就别写（关于页没有日期；写 date: "" 是脏数据）
+    if str(meta.get("date") or "").strip():
+        lines.append(f"date: {q(meta['date'])}")
     if meta.get("description"):
         lines.append(f"description: {q(meta['description'])}")
     if meta.get("url"):
@@ -343,12 +345,17 @@ def load_about(repo_root, path=None):
     p = Path(path) if path else pick_about_path(repo_root)
     repo = Path(repo_root)
     if p.exists():
-        meta, body = parse_front_matter(p.read_text(encoding="utf-8"))
+        raw = p.read_text(encoding="utf-8")
+        meta, body = parse_front_matter(raw)
+        # 关于页是「页面」不是「文章」：没写 draft 就当它公开。
+        # 否则用助手编辑一次，就会被写进 draft: true 而从线上消失。
+        if not re.search(r"^\s*draft\s*:", raw, re.M):
+            meta["draft"] = False
         return meta, body, p
     title = p.parent.name if p.parent.name.lower() != "page" else "关于"
-    meta = {"title": title, "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+08:00"),
-            "description": "关于本站与作者", "draft": False,
-            "url": "/" + p.parent.name + "/", "tags": [], "categories": []}
+    meta = {"title": title, "date": "", "description": "关于本站与作者",
+            "draft": False, "url": "/" + p.parent.name + "/",
+            "tags": [], "categories": []}
     return meta, ABOUT_DEFAULT, p
 
 
@@ -790,6 +797,14 @@ class App:
     def _save(self, draft):
         if not self._require_repo():
             return False
+        # 已发布的文章被"保存草稿"会让它从网站上消失，先确认一次
+        if draft and self.post is not None and self.post.draft is False:
+            if not messagebox.askyesno(
+                    APP_NAME,
+                    "这篇文章现在是「已发布」状态。\n\n"
+                    "保存成草稿会让它从网站上消失（要重新发布才回来）。\n\n"
+                    "确定要改成草稿吗？"):
+                return False
         meta = self._collect_meta(draft)
         if meta is None:
             return False
@@ -1036,6 +1051,26 @@ def selftest():
     meta4, body4, _ = load_about(tmp, path3)
     assert body4.strip() == "新的简介内容" and meta4["url"] == meta3["url"]
     print("关于页读写 OK:", path3.relative_to(tmp))
+
+    # 4b. 关于页不能被写成草稿（否则编辑一次就从线上消失）
+    path3.write_text("---\ntitle: \"关于\"\nurl: \"/about/\"\n---\n\n正文\n",
+                     encoding="utf-8")
+    m_about, _, _ = load_about(tmp, path3)
+    assert m_about["draft"] is False, "缺 draft 字段的关于页应视为公开"
+    save_about(m_about, "改过的正文", path3)
+    after = path3.read_text(encoding="utf-8")
+    assert "draft: false" in after, after
+    assert 'date: ""' not in after, "空日期不该写进 front matter"
+    m_again, _, _ = load_about(tmp, path3)
+    assert m_again["draft"] is False
+    print("关于页不会变草稿 OK")
+
+    # 4c. 显式写了 draft: true 的关于页要尊重原意
+    path3.write_text("---\ntitle: \"关于\"\ndraft: true\n---\n\n正文\n",
+                     encoding="utf-8")
+    m_explicit, _, _ = load_about(tmp, path3)
+    assert m_explicit["draft"] is True, "显式草稿应被尊重"
+    print("显式草稿被尊重 OK")
 
     # 5. 列表扫描
     posts = scan_posts(tmp)
