@@ -1090,6 +1090,21 @@ def selftest():
     assert baks and "原样备份" in baks[-1].read_text(encoding="utf-8") + "原样备份"
     print("配色面板解析/写回/备份 OK")
 
+    # 8. 真实构造一遍 GUI（抓"属性在赋值前被引用"这类只有跑起来才炸的错）
+    root = Tk()
+    root.withdraw()
+    try:
+        app = App(root)
+        root.update_idletasks()
+        if HAS_THEME_EDITOR:
+            tp = app.theme_panel
+            assert tp is not None and tp.container is not None, "配色面板没建好"
+            assert len(tp.cells) > 0, "配色面板没认出任何变量"
+            assert tp.save_var.get() == "保存（预览自动刷新）", "保存按钮初始态不对"
+            print(f"GUI 构造 OK（配色面板 {len(tp.cells)} 项可调）")
+    finally:
+        root.destroy()
+
     shutil.rmtree(tmp, ignore_errors=True)
     print("全部自测通过")
 

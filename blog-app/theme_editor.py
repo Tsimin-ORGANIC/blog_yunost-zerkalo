@@ -358,10 +358,18 @@ def ask_color(parent, initial_hex, title="选颜色"):
     ttk.Label(top, text="档案室色板：").pack(anchor=W)
     grid = ttk.Frame(top)
     grid.pack(fill=X, pady=(6, 10))
+    def commit(v):
+        """直接采纳某个颜色并关闭（点色板不用再按确定）"""
+        if not HEX_RE.match(v.strip()):
+            messagebox.showerror("颜色", "请填 #RRGGBB 或 #RGB 形式的颜色。", parent=win)
+            return
+        result["value"] = v.strip().upper()
+        win.destroy()
+
     for idx, (name, hexv) in enumerate(PALETTE):
         b = Button(grid, text=name, bg=hexv, fg="#ffffff" if sum(
             parse_color(hexv)[:3]) < 380 else "#101010",
-            relief="flat", width=12, command=lambda h=hexv: var.set(h))
+            relief="flat", width=12, command=lambda h=hexv: commit(h))
         b.grid(row=idx // 3, column=idx % 3, padx=3, pady=3)
 
     mid = ttk.Frame(win, padding=(10, 0))
@@ -394,12 +402,7 @@ def ask_color(parent, initial_hex, title="选颜色"):
     bar.pack(fill=X)
 
     def ok():
-        v = var.get().strip()
-        if not HEX_RE.match(v):
-            messagebox.showerror("颜色", "请填 #RRGGBB 或 #RGB 形式的颜色。", parent=win)
-            return
-        result["value"] = v.upper()
-        win.destroy()
+        commit(var.get())
 
     ttk.Button(bar, text="确定", command=ok).pack(side=LEFT)
     ttk.Button(bar, text="取消", command=win.destroy).pack(side=LEFT, padx=8)
@@ -418,6 +421,7 @@ class ColorCell:
         self.rgb = (r, g, b)
         self.alpha = DoubleVar(value=a)
         self._alpha_stored = a
+        self.var = StringVar(value=to_hex(r, g, b))   # 供面板追踪"是否改动"
 
         self.btn = Button(master, text=to_hex(r, g, b), bg=to_hex(r, g, b),
                           fg="#ffffff" if (r + g + b) < 380 else "#101010",
@@ -436,6 +440,7 @@ class ColorCell:
         self.rgb = parse_color(got)[:3]
         self.btn.config(text=got, bg=got,
                         fg="#ffffff" if sum(self.rgb) < 380 else "#101010")
+        self.var.set(got)      # 通知面板：值变了
 
     @property
     def orig_value(self):
@@ -456,6 +461,7 @@ class InlineRgbaCell:
         r, g, b, a = parse_color(decl.value)
         self.rgb = (r, g, b)
         self.alpha = DoubleVar(value=a)
+        self.var = StringVar(value=to_hex(r, g, b))   # 供面板追踪"是否改动"
         self.btn = Button(master, text=to_hex(r, g, b), bg=to_hex(r, g, b),
                           fg="#ffffff" if (r + g + b) < 380 else "#101010",
                           relief="solid", width=10, command=self.pick)
@@ -469,6 +475,7 @@ class InlineRgbaCell:
             self.rgb = parse_color(got)[:3]
             self.btn.config(text=got, bg=got,
                             fg="#ffffff" if sum(self.rgb) < 380 else "#101010")
+            self.var.set(got)      # 通知面板：值变了
 
     @property
     def orig_value(self):
@@ -560,7 +567,9 @@ class ThemePanel(ttk.Frame):
         bar.pack(fill=X, side=TOP)
         self.path_var = StringVar(value="")
         ttk.Label(bar, textvariable=self.path_var, foreground="#666").pack(side=LEFT)
-        ttk.Button(bar, text="保存（预览自动刷新）", command=self.save).pack(side=RIGHT, padx=(6, 0))
+        self.save_var = StringVar(value="保存（预览自动刷新）")
+        self.btn_save = ttk.Button(bar, textvariable=self.save_var, command=self.save)
+        self.btn_save.pack(side=RIGHT, padx=(6, 0))
         ttk.Button(bar, text="放弃改动", command=self.reload).pack(side=RIGHT, padx=(6, 0))
         ttk.Button(bar, text="还原备份…", command=self.restore).pack(side=RIGHT, padx=(6, 0))
         ttk.Button(bar, text="重新载入", command=self.reload).pack(side=RIGHT, padx=(6, 0))
@@ -621,6 +630,32 @@ class ThemePanel(ttk.Frame):
         self._single_section(box)
         self._font_section(box)
         self._summary(box)
+        self._watch_changes()
+
+    def _watch_changes(self):
+        """给每个控件的变量挂回调：一动就把保存按钮改成「保存 ● N 项未保存」"""
+        self.after_ids = []
+
+        def bump(*_):
+            n = len([1 for _, c in self.cells if c.is_changed()])
+            if n:
+                self.save_var.set(f"保存 ● {n} 项未保存")
+                self.tip.config(text="改完要按「保存」才会写进 SCSS（预览开着会自动刷新）。")
+            else:
+                self.save_var.set("保存（预览自动刷新）")
+                self.tip.config(text="")
+
+        for _, c in self.cells:
+            # alpha（透明度滑块）和 var（颜色 hex / 数值）都要挂，缺一个就漏更新
+            for name in ("alpha", "var"):
+                v = getattr(c, name, None)
+                if v is None:
+                    continue
+                try:
+                    v.trace_add("write", bump)
+                except Exception:
+                    pass
+        self._bump = bump
 
     def _summary(self, box):
         """列出这个主题里没找到的项，别让人以为是坏了"""
