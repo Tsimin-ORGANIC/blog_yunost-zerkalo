@@ -612,6 +612,7 @@ class ThemePanel(ttk.Frame):
         box = ttk.Frame(sf.inner, padding=8)
         box.pack(fill=BOTH, expand=True)
 
+        total = len(self.cells)
         self._color_section(box, "案卷标签·锆蓝墨（分类/标签）", CHIP_VARS, ("dark", "light"))
         self._color_section(box, "案卷标签·丹砂红（随机变体）", CHIP_VARS,
                             ("cinnabar", "cinnabar-light"))
@@ -619,6 +620,28 @@ class ThemePanel(ttk.Frame):
             self._color_section(box, title, items, ("dark", "light"))
         self._single_section(box)
         self._font_section(box)
+        self._summary(box)
+
+    def _summary(self, box):
+        """列出这个主题里没找到的项，别让人以为是坏了"""
+        all_vars = [v for _, items in COLOR_GROUPS for _, v in items] + \
+                   [v for _, v in CHIP_VARS] + \
+                   [p for _, items in SINGLE_ITEMS for _, p, *_ in items]
+        missing = []
+        for v in dict.fromkeys(all_vars):
+            if v.startswith("--"):
+                if not (self.tf.find(v, "dark") or self.tf.find(v, "light")):
+                    missing.append(v)
+            elif v == "opacity":
+                if not self.tf.find("opacity", path_contains="body::before"):
+                    missing.append("body::before 的 opacity")
+        box_ = ttk.Frame(box)
+        box_.pack(fill=X, pady=(12, 20))
+        n = len(self.cells)
+        ttk.Label(box_, foreground="#666", wraplength=760, justify="left",
+                  text=f"本站共认出 {n} 项可调。\n"
+                       f"没找到的（这个主题没用到，已自动隐藏）：{'、'.join(missing) if missing else '无'}"
+                  ).pack(anchor=W)
 
     def _row(self, box, label, hint=""):
         row = ttk.Frame(box)
@@ -634,27 +657,30 @@ class ThemePanel(ttk.Frame):
                  if self.tf.find(var, scopes[0]) or self.tf.find(var, scopes[1])]
         if not found:
             return
+        # 单色主题（没有亮色块）就只画一栏，别留一排「—」
+        has_second = any(self.tf.find(var, scopes[1]) for _, var in found)
+        use_scopes = scopes if has_second else scopes[:1]
+
         grp = ttk.LabelFrame(box, text=f" {title} ", padding=6)
         grp.pack(fill=X, pady=(8, 2))
         head = ttk.Frame(grp)
         head.pack(fill=X)
         ttk.Label(head, text="", width=24).pack(side=LEFT)
-        ttk.Label(head, text="暗色", width=16, anchor=W).pack(side=LEFT)
-        ttk.Label(head, text="亮色（浅色模式）", width=24, anchor=W).pack(side=LEFT)
+        ttk.Label(head, text=("暗色" if has_second else "颜色"),
+                  width=16, anchor=W).pack(side=LEFT)
+        if has_second:
+            ttk.Label(head, text="亮色（浅色模式）", width=24, anchor=W).pack(side=LEFT)
 
         for label, var in found:
             row = self._row(grp, label)
-            for sc in scopes:
+            for sc in use_scopes:
                 d = self.tf.find(var, sc)
                 holder = ttk.Frame(row, width=170)
                 holder.pack(side=LEFT, padx=(0, 10))
                 if d is None:
                     ttk.Label(holder, text="—", foreground="#aaa").pack(side=LEFT)
                     continue
-                if RGBA_RE.search(d.value) and not d.value.strip().startswith("#"):
-                    cell = ColorCell(holder, d, f"{label}·{sc}")
-                else:
-                    cell = ColorCell(holder, d, f"{label}·{sc}")
+                cell = ColorCell(holder, d, f"{label}·{sc}")
                 self.cells.append((d, cell))
 
     def _single_section(self, box):
